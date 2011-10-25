@@ -34,6 +34,7 @@ using terms from application "iChat"
 					tell application "iChat" to set windowName to name of front window
 					-- Character id 8212 is an em dash.  We don't use a literal, because AppleScript uses Mac-Roman or UTF-16 (with a BOM), but github will show it as ISO-8859-1.  To allow both clones and web browsing to work, we use ASCII only.
 					if windowName starts with (buddyName & space & character id 8212 & space) then return
+					if windowName ends with (space & character id 8212 & space & buddyName) then return
 				end if
 			end try
 		end if
