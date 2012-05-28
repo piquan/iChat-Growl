@@ -39,21 +39,28 @@ using terms from application "iChat"
 			end try
 		end if
 		
-		-- For Growl 1.2.2, the application should be "GrowlHelperApp".  If it's wrong, AppleScript Editor will highlight this line and tell you to select an app.  In that case, you have Growl 1.2.2 or earlier, and should change "Growl" in the next line to "GrowlHelperApp".
-		tell application "Growl"
-			local allNotificationsList, enabledNotificationsList
-			set the allNotificationsList to {"Login Finished", "Logout Finished", "Buddy Became Available", "Buddy Became Unavailable", "Buddy Authorization Requested", "Chat Room Message Received", "Message Received", "Addressed Message Received", "Message Sent", "Received Text Invitation", "Received Audio Invitation", "Received Video Invitation", "Received Local Screen Sharing Invitation", "Received Remote Screen Sharing Invitation", "A/V Chat Started", "A/V Chat Ended", "Received File Transfer Invitation", "Completed File Transfer"}
-			set the enabledNotificationsList to allNotificationsList
-			-- Another reasonable enabledNotificationsList would be:
-			-- {"Buddy Became Available", "Buddy Became Unavailable", "Buddy Authorization Requested", "Chat Room Message Received", "Message Received", "Addressed Message Received", "Received Text Invitation", "Received Audio Invitation", "Received Video Invitation", "Received Local Screen Sharing Invitation", "Received Remote Screen Sharing Invitation", "Received File Transfer Invitation", "Completed File Transfer"}
-			-- but since the script has to be enabled individually for each event in iChat anyway, there's no point in not enabling all notifications in Growl by default.
-			register as application "iChat Growl AppleScript" all notifications allNotificationsList default notifications enabledNotificationsList icon of application "iChat"
-			if buddyIcon is equal to missing value then
-				notify with name theEvent title theTitle description theDescription application name "iChat Growl AppleScript" without sticky
-			else
-				notify with name theEvent title theTitle description theDescription application name "iChat Growl AppleScript" image buddyIcon without sticky
-			end if
+		tell application "System Events"
+			set GrowlisRunning to Â
+				(count of (every process whose bundle identifier is "com.Growl.GrowlHelperApp")) > 0
 		end tell
+		
+		
+		if GrowlisRunning then
+			tell application id "com.Growl.GrowlHelperApp"
+				local allNotificationsList, enabledNotificationsList
+				set the allNotificationsList to {"Login Finished", "Logout Finished", "Buddy Became Available", "Buddy Became Unavailable", "Buddy Authorization Requested", "Chat Room Message Received", "Message Received", "Addressed Message Received", "Message Sent", "Received Text Invitation", "Received Audio Invitation", "Received Video Invitation", "Received Local Screen Sharing Invitation", "Received Remote Screen Sharing Invitation", "A/V Chat Started", "A/V Chat Ended", "Received File Transfer Invitation", "Completed File Transfer"}
+				set the enabledNotificationsList to allNotificationsList
+				-- Another reasonable enabledNotificationsList would be:
+				-- {"Buddy Became Available", "Buddy Became Unavailable", "Buddy Authorization Requested", "Chat Room Message Received", "Message Received", "Addressed Message Received", "Received Text Invitation", "Received Audio Invitation", "Received Video Invitation", "Received Local Screen Sharing Invitation", "Received Remote Screen Sharing Invitation", "Received File Transfer Invitation", "Completed File Transfer"}
+				-- but since the script has to be enabled individually for each event in iChat anyway, there's no point in not enabling all notifications in Growl by default.
+				register as application "iChat Growl AppleScript" all notifications allNotificationsList default notifications enabledNotificationsList icon of application "iChat"
+				if buddyIcon is equal to missing value then
+					notify with name theEvent title theTitle description theDescription application name "iChat Growl AppleScript" without sticky
+				else
+					notify with name theEvent title theTitle description theDescription application name "iChat Growl AppleScript" image buddyIcon without sticky
+				end if
+			end tell
+		end if
 		
 	end growl
 	
