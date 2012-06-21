@@ -13,12 +13,21 @@ script config
 	property autoAccept : {}
 	
 	(*
-I have too many contacts on the social networks, and I don't chat with the vast majority of them.  This script supports filtering out the distracting login / logout messages.  I don't care about login / logout messages from Facebook friends or Bonjour contacts.
+I have too many contacts on the social networks, and I don't chat with the vast majority of them.  This script supports filtering out the distracting login / logout messages.  I don't care about login / logout messages from:
+- Facebook friends
+- Contacts from Google Talk via Google+
+- Bonjour contacts
+- Myself
 
 However, if I'm chatting with any of these people, I do care what they have to say.  Only login and logout messages get filtered.
+
+The filtering rules may seem strange, but they work for me in practice.
+First: Filtering is only applied to events in filterEvents.  No other events ever get filtered.
+Second: A event will be ignored if it matches either filterAccounts or filterBuddies.
+In other words, it must match (filterEvents and (filterAccounts or filterBuddies)) to be filtered.
 *)
 	
-	-- filterEvents : Don't show these events if either the account name is in filterAccounts.  If you want to ignore a particular event altogether, regardless of account, then disable the script for that event in iChat's Preferences.
+	-- filterEvents : Don't show these events if either the account name is in filterAccounts, or the buddy is in filterBuddies.  If neither of those matches, then the event is handled normally. If you want to ignore a particular event altogether, regardless of account, then disable the script for that event in iChat's Preferences.
 	-- Note that only events that are associated with a buddy can be filterd here.
 	-- Example:
 	-- property filterEvents : {"Buddy Became Available", "Buddy Became Unavailable"}
@@ -28,6 +37,10 @@ However, if I'm chatting with any of these people, I do care what they have to s
 	-- Example:
 	-- property filterAccounts : {"Bonjour", "Facebook"}
 	property filterAccounts : {}
+	-- filterBuddies : Don't show events from filterEvents if the handle or name includes one of these strings.  You may want to include yourself here, so that you don't get messages when you log in.  The @public.talk.google.com will filter out Google+ contacts (if you've enabled Google Talk for Google+ friends), but not Google Talk contacts that you've added otherwise.  You can also include any buddies who log on and off frequently.
+	-- Example:
+	-- property filterBuddies : {"@public.talk.google.com"}
+	property filterBuddies : {}
 	
 	-- If you're filtering certain events, you might want to turn off their sounds in iChat, and let this script play the sound if the event passes the filters.
 	-- The sound can be a filename, or any of the sounds built into iChat: "Buddy Logging In", "Buddy Logging Out", "File Transfer Complete", "Invitation Accepted", "Invitation", "Logged In", "Received Message", "Ringer", "Sent Message".
@@ -36,7 +49,55 @@ However, if I'm chatting with any of these people, I do care what they have to s
 	property soundlist : {}
 	
 	(********************************************************
-This is the end of the configuration variables.
+This is the end of the the straightforward configuration variables.
+If you know some basic AppleScript, there's a few handlers you can put in your Growl Config.scpt to add custom actions, as follows.
+(By the way: if you need to, you can use a script bundle named Growl Config.scptd instead of a normal .scpt script.)
+********************************************************)
+	
+	-- We avoid using terms from iChat or Growl in the parameter names here, so that the user's config file doesn't need a "using terms from" section.  (Terms from AppleScript are fine, even if they're also in iChat or Growl.  That's why we can use "title".)
+	
+	-- readyToNotify is called before notifications for an event, regardless of whether an event is filtered out or not.
+	on readyToNotify for theGrowlText from theBuddy out of growlEventName given showingStatus:showingStatus
+	end readyToNotify
+	
+	-- willNotify and didNotify are called before and after playing sounds or showing growls.  They are not called if an event is filtered out, or if the chat window for the buddy is frontmost.
+	on willNotify for theGrowlText from theBuddy out of growlEventName given title:theTitle, icon:theIcon, showingStatus:showingStatus
+	end willNotify
+	on didNotify for theGrowlText from theBuddy out of growlEventName given title:theTitle, icon:theIcon, showingStatus:showingStatus
+	end didNotify
+	
+	-- willGrowl and didGrowl are called right before and after showing a Growl notification.  If a Growl won't be sent (because it's been filtered out, or because Growl isn't running), then they are not called.  (If you turn off Growls for iChat in the Growl preferences, these are still called anyway.)
+	on willGrowl for theGrowlText from theBuddy out of growlEventName given title:theTitle, icon:theIcon, showingStatus:showingStatus
+	end willGrowl
+	on didGrowl for theGrowlText from theBuddy out of growlEventName given title:theTitle, icon:theIcon, showingStatus:showingStatus
+	end didGrowl
+	
+	-- willPlaySound and didPlaySound are called right before and after playing a sound.
+	on willPlaySound for theGrowlText from theBuddy out of growlEventName given title:theTitle, icon:theIcon, showingStatus:showingStatus
+	end willPlaySound
+	on didPlaySound for theGrowlText from theBuddy out of growlEventName given title:theTitle, icon:theIcon, showingStatus:showingStatus
+	end didPlaySound
+	
+	-- shouldNotify is called to filter events, and only notify for some events.  It must return a true or false value.  It is called after readyToNotify, but before willNotify.
+	on shouldNotify for theText from theBuddy out of growlEventName given showingStatus:showingStatus
+		-- This is where filterEvents, filterAccounts, and filteredBuddies happen.  If you override this in your config file, then your 
+		using terms from application "iChat"
+			if growlEventName is in config's filterEvents then
+				local thefilteredBuddy, buddyName, buddyHandle
+				if the name of the service of theBuddy is in config's filterAccounts then return false
+				set buddyName to theBuddy's name
+				set buddyHandle to theBuddy's handle
+				repeat with thefilteredBuddy in config's filterBuddies
+					if thefilteredBuddy is in buddyHandle then return false
+					if thefilteredBuddy is in buddyName then return false
+				end repeat
+			end if
+			return true
+		end using terms from
+	end shouldNotify
+	
+	(********************************************************
+This is the end of the configuration section.
 ********************************************************)
 end script
 
@@ -89,7 +150,16 @@ on initConfig()
 	set config's autoAccept to getConfig(a reference to userConfig's autoAccept, defaultConfig's autoAccept)
 	set config's filterEvents to getConfig(a reference to userConfig's filterEvents, defaultConfig's filterEvents)
 	set config's filterAccounts to getConfig(a reference to userConfig's filterAccounts, defaultConfig's filterAccounts)
+	set config's filterBuddies to getConfig(a reference to userConfig's filterBuddies, defaultConfig's filterBuddies)
 	set config's soundlist to getConfig(a reference to userConfig's soundlist, defaultConfig's soundlist)
+	set config's readyToNotify to getConfig(a reference to userConfig's readyToNotify, defaultConfig's readyToNotify)
+	set config's willNotify to getConfig(a reference to userConfig's willNotify, defaultConfig's willNotify)
+	set config's didNotify to getConfig(a reference to userConfig's didNotify, defaultConfig's didNotify)
+	set config's willGrowl to getConfig(a reference to userConfig's willGrowl, defaultConfig's willGrowl)
+	set config's didGrowl to getConfig(a reference to userConfig's didGrowl, defaultConfig's didGrowl)
+	set config's willPlaySound to getConfig(a reference to userConfig's willPlaySound, defaultConfig's willGrowl)
+	set config's didPlaySound to getConfig(a reference to userConfig's didPlaySound, defaultConfig's didPlaySound)
+	set config's shouldNotify to getConfig(a reference to userConfig's shouldNotify, defaultConfig's shouldNotify)
 	return config
 end initConfig
 
@@ -113,23 +183,30 @@ on playSound from soundName
 end playSound
 
 using terms from application "iChat"
-	
-	on growl of theText from theBuddy for theEvent given status:showStatus
+	on growl of theText from theBuddy for theEvent given showingStatus:showingStatus
 		local buddyName, buddyIcon
 		local theTitle, theDescription
 		
 		initConfig()
+		
+		-- You could actually combine readyToNotify with shouldNotify.  They're separate because the default shouldNotify has useful code that the user might want to keep when overriding readyToNotify.
+		readyToNotify of config for theText from theBuddy out of theEvent given showingStatus:showingStatus
+		
+		shouldNotify of config for theText from theBuddy out of theEvent given showingStatus:showingStatus
+		if not result then
+			log "User config has filtered out this event"
+			return
+		end if
 		
 		if theBuddy is equal to null then
 			set theTitle to theEvent
 			set theDescription to theText
 			set buddyIcon to missing value
 		else
-			if theEvent is in config's filterEvents and the name of the service of theBuddy is in config's filterAccounts then return
-			
 			set buddyName to theBuddy's name
 			set buddyIcon to theBuddy's image
-			if showStatus and theBuddy's status message is not "" then
+			
+			if showingStatus and theBuddy's status message is not "" then
 				set theTitle to theText
 				set theDescription to theBuddy's status message
 			else
@@ -137,7 +214,7 @@ using terms from application "iChat"
 				set theDescription to theText
 			end if
 			
-			-- Don't do anything if we're chatting with the buddy in question
+			-- Don't do anything if we're chatting with the buddy in question.
 			try
 				local frontApp, windowName
 				-- This is in a "try" because, if things aren't exactly as we're expecting (e.g., iChat is frontmost  but has no windows open), we want to go ahead and growl.
@@ -151,9 +228,13 @@ using terms from application "iChat"
 			end try
 		end if
 		
+		willNotify of config for theText from theBuddy out of theEvent given title:theTitle, description:theDescription, icon:buddyIcon, showingStatus:showingStatus
+		
 		repeat with soundRec in config's soundlist
 			if soundRec's event is theEvent then
+				willPlaySound of config for theText from theBuddy out of theEvent given title:theTitle, description:theDescription, icon:buddyIcon, showingStatus:showingStatus
 				playSound from soundRec's sound
+				didPlaySound of config for theText from theBuddy out of theEvent given title:theTitle, description:theDescription, icon:buddyIcon, showingStatus:showingStatus
 			end if
 		end repeat
 		
@@ -173,56 +254,58 @@ using terms from application "iChat"
 			end if
 		end tell
 		
+		didGrowl of config for theDescription from theBuddy out of theEvent given title:theTitle, eventName:theEvent, icon:buddyIcon, showingStatus:showingStatus
+		didNotify of config for theText from theBuddy out of theEvent given title:theTitle, description:theDescription, icon:buddyIcon, showingStatus:showingStatus
+		
 	end growl
 	
 	on login finished for theService
-		growl of (theService's name & " login finished") from null for "Login Finished" without status
+		growl of (theService's name & " login finished") from null for "Login Finished" without showingStatus
 	end login finished
 	on logout finished for theService
-		growl of (theService's name & " logout finished") from null for "Logout Finished" without status
+		growl of (theService's name & " logout finished") from null for "Logout Finished" without showingStatus
 	end logout finished
 	on buddy became available theBuddy
-		growl of (theBuddy's name & " became available") from theBuddy for "Buddy Became Available" with status
+		growl of (theBuddy's name & " became available") from theBuddy for "Buddy Became Available" with showingStatus
 	end buddy became available
 	on buddy became unavailable theBuddy
-		growl of (theBuddy's name & " became unavailable") from theBuddy for "Buddy Became Unavailable" with status
+		growl of (theBuddy's name & " became unavailable") from theBuddy for "Buddy Became Unavailable" with showingStatus
 	end buddy became unavailable
 	on buddy authorization requested theRequest
 		local theBuddy
 		set theBuddy to theRequest's buddy
-		growl of (theBuddy's name & " requested authorization") from theBuddy for "Buddy Authorization Requested" without status
+		growl of (theBuddy's name & " requested authorization") from theBuddy for "Buddy Authorization Requested" without showingStatus
 		if "buddy authorization" is in config's autoAccept then accept theRequest
 	end buddy authorization requested
 	on chat room message received message from theBuddy for textChat
-		growl of message from theBuddy for "Chat Room Message Received" without status
+		growl of message from theBuddy for "Chat Room Message Received" without showingStatus
 	end chat room message received
 	on message received message from theBuddy for textChat
-		growl of message from theBuddy for "Message Received" without status
+		growl of message from theBuddy for "Message Received" without showingStatus
 	end message received
 	(*
-	-- The "addressed message received" and "received remote screen sharing invitation" events
-	-- conflict; I think they have the same ID by mistake.
+	-- The "addressed message received" and "received remote screen sharing invitation" events conflict; I think they have the same ID by mistake.
 	on addressed message received from theBuddy for textChat
 		growl of message from theBuddy for "Addressed Message Received"
 	end addressed message received
 	*)
 	on message sent message for textChat
-		growl of message from null for "Message Sent" without status
+		growl of message from null for "Message Sent" without showingStatus
 	end message sent
 	on received text invitation message from theBuddy for textChat
-		growl of message from theBuddy for "Received Text Invitation" without status
+		growl of message from theBuddy for "Received Text Invitation" without showingStatus
 		if "text" is in config's autoAccept then accept textChat
 	end received text invitation
 	on received audio invitation from theBuddy for audioChat
-		growl of (theBuddy's name & " would like to speak with you.") from theBuddy for "Received Audio Invitation" without status
+		growl of (theBuddy's name & " would like to speak with you.") from theBuddy for "Received Audio Invitation" without showingStatus
 		if "audio" is in config's autoAccept then accept audioChat
 	end received audio invitation
 	on received video invitation from theBuddy for videoChat
-		growl of (theBuddy's name & " would like to see you.") from theBuddy for "Received Video Invitation" without status
+		growl of (theBuddy's name & " would like to see you.") from theBuddy for "Received Video Invitation" without showingStatus
 		if "video" is in config's autoAccept then accept videoChat
 	end received video invitation
 	on received local screen sharing invitation from theBuddy for screenChat
-		growl of (theBuddy's name & " would like to see your screen.") from theBuddy for "Received Local Screen Sharing Invitation" without status
+		growl of (theBuddy's name & " would like to see your screen.") from theBuddy for "Received Local Screen Sharing Invitation" without showingStatus
 		if "local screen sharing" is in config's autoAccept then accept screenChat
 	end received local screen sharing invitation
 	(*
@@ -230,21 +313,21 @@ using terms from application "iChat"
 	-- conflict; I think they have the same ID by mistake.
 	on received remote screen sharing invitation from theBuddy for screenChat
 		growl of (theBuddy's name & " would like you to see their screen.") from theBuddy for "Received Remote Screen Sharing Invitation"
-		if "remote screen sharing" is in autoAccept then accept screenChat
+		if "remote screen sharing" is in config's autoAccept then accept screenChat
 	end received remote screen sharing invitation
 	*)
 	on av chat started
-		growl of "A/V Chat Started" from null for "A/V Chat Started" without status
+		growl of "A/V Chat Started" from null for "A/V Chat Started" without showingStatus
 	end av chat started
 	on av chat ended
-		growl of "A/V Chat Ended" from null for "A/V Chat Ended" without status
+		growl of "A/V Chat Ended" from null for "A/V Chat Ended" without showingStatus
 	end av chat ended
 	on received file transfer invitation fileTransfer
-		growl of (fileTransfer's name) from fileTransfer's buddy for "Received File Transfer Invitation" without status
-		if "file transfer" is in autoAccept then accept fileTransfer
+		growl of (fileTransfer's name) from fileTransfer's buddy for "Received File Transfer Invitation" without showingStatus
+		if "file transfer" is in config's autoAccept then accept fileTransfer
 	end received file transfer invitation
 	on completed file transfer fileTransfer
-		growl of (fileTransfer's name) from fileTransfer's buddy for "Completed File Transfer" without status
+		growl of (fileTransfer's name) from fileTransfer's buddy for "Completed File Transfer" without showingStatus
 	end completed file transfer
 	
 end using terms from
