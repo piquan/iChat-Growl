@@ -4,6 +4,39 @@
 -- property autoAccept : {"text", "remote screen sharing"}
 property autoAccept : {} -- The default, as distributed, is to disable auto-accept, since that's really not the point of this script.
 
+-- ignoreAccounts : Don't show certain events (listed in ignoreEvents, below) for these accounts.  The account name should match the "Description" field of the service in your iChat settings; note that Bonjour is always named "Bonjour".
+property ignoreAccounts : {"Facebook", "Bonjour"}
+-- ignoreEvents : Don't show these events if the account name is in ignoreAccounts.  If the account is not in ignoreAccounts, then the event is handled normally. If you want to ignore a particular event altogether, regardless of account, then disable the script for that event in iChat's Preferences.
+-- Note that only events that are associated with a buddy can be ignored here.
+property ignoreEvents : {"Buddy Became Available", "Buddy Became Unavailable"}
+
+-- If you're ignoring certain accounts, you might want to turn off the sounds for the corresponding events in iChat, and let this script play the sound if the account isn't being ignored.
+-- The sound can be a filename, or any of: "Buddy Logging In", "Buddy Logging Out", "File Transfer Complete", "Invitation Accepted", "Invitation", "Logged In", "Received Message", "Ringer", "Sent Message".  (This is the list of sounds built into iChat; it may change in new releases of iChat.)
+property soundlist : {{event:"Buddy Became Available", sound:"Buddy Logging In"}, {event:"Buddy Became Unavailable", sound:"Buddy Logging Out"}}
+
+-- END OF OPTIONS --
+
+
+
+-- Play a sound file, specified by its POSIX path.  The file can be any format that Core Audio or QuickTime supports.
+on playSoundFile from soundPath
+	-- Yes, this is ridiculous.  AppleScript doesn't provide a way to play a sound file.  AppKit gives us NSSound, but of course it's not accessible to AppleScript.  It's possible with AppleScriptObjC, but that's only available in AppleScript applications, not in scripts.
+	do shell script "python -c 'import time; import AppKit; s=AppKit.NSSound .alloc() .initWithContentsOfFile_byReference_(\"'" & (quoted form of soundPath) & "'\", True); s.play() and time.sleep(s.duration())' &>/dev/null&"
+end playSoundFile
+-- Play a sound.  The soundName can be an alias, a POSIX path, or text that is the name of a sound built into iChat (e.g., "Buddy Logging In").
+on playSound from soundName
+	if the class of soundName is alias then
+		playSoundFile from the POSIX path of soundName
+	else if soundName starts with "/" then
+		playSoundFile from soundName
+	else
+		local iChatBundle, soundPath
+		tell application "System Events" to set iChatBundle to the application process "iChat"'s application file
+		set soundPath to (the POSIX path of iChatBundle) & "Contents/Resources/" & soundName & ".aiff"
+		playSoundFile from soundPath
+	end if
+end playSound
+
 using terms from application "iChat"
 	
 	on growl of theText from theBuddy for theEvent given status:showStatus
@@ -15,6 +48,8 @@ using terms from application "iChat"
 			set theDescription to theText
 			set buddyIcon to missing value
 		else
+			if theEvent is in ignoreEvents and the name of the service of theBuddy is in ignoreAccounts then return
+			
 			set buddyName to theBuddy's name
 			set buddyIcon to theBuddy's image
 			if showStatus and theBuddy's status message is not "" then
@@ -38,6 +73,12 @@ using terms from application "iChat"
 				end if
 			end try
 		end if
+		
+		repeat with soundRec in soundlist
+			if soundRec's event is theEvent then
+				playSound from soundRec's sound
+			end if
+		end repeat
 		
 		-- For Growl 1.2.2, the application should be "GrowlHelperApp".  If it's wrong, AppleScript Editor will highlight this line and tell you to select an app.  In that case, you have Growl 1.2.2 or earlier, and should change "Growl" in the next line to "GrowlHelperApp".
 		tell application "Growl"
