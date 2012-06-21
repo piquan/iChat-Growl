@@ -80,7 +80,7 @@ If you know some basic AppleScript, there's a few handlers you can put in your G
 	
 	-- shouldNotify is called to filter events, and only notify for some events.  It must return a true or false value.  It is called after readyToNotify, but before willNotify.
 	on shouldNotify for theText from theBuddy out of growlEventName given showingStatus:showingStatus
-		-- This is where filterEvents, filterAccounts, and filteredBuddies happen.  If you override this in your config file, then your 
+		-- This is where filterEvents, filterAccounts, and filteredBuddies happen.  If you override this handler in your config file, then your code will need to do this if you want it to happen.
 		using terms from application "iChat"
 			if growlEventName is in config's filterEvents then
 				local thefilteredBuddy, buddyName, buddyHandle
