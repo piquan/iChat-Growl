@@ -165,8 +165,8 @@ end initConfig
 
 -- Play a sound file, specified by its POSIX path.  The file can be any format that Core Audio or QuickTime supports.
 on playSoundFile from soundPath
-	-- Yes, this is ridiculous.  AppleScript doesn't provide a way to play a sound file.  AppKit gives us NSSound, but of course it's not accessible to AppleScript.  It's possible with AppleScriptObjC, but that's only available in AppleScript applications, not in scripts.
-	do shell script "python -c 'import time; import AppKit; s=AppKit.NSSound .alloc() .initWithContentsOfFile_byReference_(\"'" & (quoted form of soundPath) & "'\", True); s.play() and time.sleep(s.duration())' &>/dev/null&"
+	-- Yes, this is ridiculous.  AppleScript doesn't provide a way to play a sound file.  AppKit gives us NSSound, but of course it isn't accessible to AppleScript.  It's possible with AppleScriptObjC, but that's only available in AppleScript applications, not in scripts.  This has to be a script (not an application) for iChat to be able to run it.
+	do shell script "python -c 'import sys, time, AppKit; s=AppKit.NSSound .alloc() .initWithContentsOfFile_byReference_(sys.argv[1], True); s.play() and time.sleep(s.duration())' " & the quoted form of soundPath & " &>/dev/null&"
 end playSoundFile
 -- Play a sound.  The soundName can be an alias, a POSIX path, or text that is the name of a sound built into iChat (e.g., "Buddy Logging In").
 on playSound from soundName
@@ -175,10 +175,10 @@ on playSound from soundName
 	else if soundName starts with "/" then
 		playSoundFile from soundName
 	else
-		local iChatBundle, soundPath
-		tell application "System Events" to set iChatBundle to the application process "iChat"'s application file
-		set soundPath to (the POSIX path of iChatBundle) & "Contents/Resources/" & soundName & ".aiff"
-		playSoundFile from soundPath
+		local soundFilename, soundAlias
+		set soundFilename to soundName & ".aiff"
+		set soundAlias to the path to resource soundFilename in bundle (application "iChat")
+		playSoundFile from soundAlias's POSIX path
 	end if
 end playSound
 
@@ -217,9 +217,8 @@ using terms from application "iChat"
 			-- Don't do anything if we're chatting with the buddy in question.
 			try
 				local frontApp, windowName
-				-- This is in a "try" because, if things aren't exactly as we're expecting (e.g., iChat is frontmost  but has no windows open), we want to go ahead and growl.
-				tell application "System Events" to set frontApp to name of first application process whose frontmost is true
-				if frontApp is "iChat" then
+				-- This is in a "try" because, if things aren't exactly as we're expecting (e.g., iChat is frontmost but has no windows open), we want to go ahead and growl.
+				if application "iChat" is frontmost then
 					tell application "iChat" to set windowName to name of front window
 					-- Character id 8212 is an em dash.  We don't use a literal, because AppleScript uses Mac-Roman or UTF-16 (with a BOM), but github will show it as ISO-8859-1.  To allow both clones and web browsing to work, we use ASCII only.
 					if windowName starts with (buddyName & space & character id 8212 & space) then return
