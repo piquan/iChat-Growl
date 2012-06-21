@@ -314,8 +314,7 @@ using terms from application "iChat"
 		if "local screen sharing" is in config's autoAccept then accept screenChat
 	end received local screen sharing invitation
 	(*
-	-- The "addressed message received" and "received remote screen sharing invitation" events
-	-- conflict; I think they have the same ID by mistake.
+	-- The "addressed message received" and "received remote screen sharing invitation" events conflict; I think they have the same ID by mistake.
 	on received remote screen sharing invitation from theBuddy for screenChat
 		growl of (theBuddy's name & " would like you to see their screen.") from theBuddy for "Received Remote Screen Sharing Invitation"
 		if "remote screen sharing" is in config's autoAccept then accept screenChat
@@ -336,3 +335,12 @@ using terms from application "iChat"
 	end completed file transfer
 	
 end using terms from
+
+(*
+-- It's convenient to have an "on run" handler during development to run test code from AppleScript Editor.  However, it appears that this handler will be called if there is an error, when iChat displays the error dialog.  (It is not called for normal events.)  So don't leave it in here after you're done with debugging.
+on run
+	using terms from application "iChat"
+		growl of "test message" from {handle:"buddy", name:"buddy", image:missing value, service:{name:"Gmail"}} for "Buddy Became Available" without showingStatus
+	end using terms from
+end run
+*)
