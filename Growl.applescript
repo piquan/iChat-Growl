@@ -1,22 +1,97 @@
--- autoAccept: Since you can't specify both this script and "Auto Accept" in the script field in iChat's preferences, it's handy to be able to tell this script to do the accept for certain types of invitations.  It would also be possible to tell it to chain-call a different script; this would be more flexible (for example, if you wanted to run "iTunes Remote Control" instead), but slower.
--- Set this to a list containing some subset of "text", "audio", "video", "buddy authorization", "local screen sharing", "remote screen sharing", and "file transfer", depending on what you want to auto-accept.  (Note that "remote screen sharing" is presently broken; see the comment below.
--- Example to enable only text and remote screen sharing:
--- property autoAccept : {"text", "remote screen sharing"}
-property autoAccept : {} -- The default, as distributed, is to disable auto-accept, since that's really not the point of this script.
+(*
+What follows are configuration variables that advanced users can edit to customize the script's behavior.
+If you don't want to change this script to edit these config variables, you can put them in another script named "Growl Config.scpt" in your Library:Scripts:iChat folder (usually the same folder as this script).  You can copy just the properties you want.  For example, if you want to change autoAccept, then the "Growl Config.scpt" file should only contain the line:
+property autoAccept : {"text", "remote screen sharing"}
+*)
+-- Note to developers: If you add a property or handler to the config script, you'll need to add it to the end of initConfig() too.
+script config
+	-- autoAccept: Since you can't specify both this script and "Auto Accept" in the script field in iChat's preferences, it's handy to be able to tell this script to do the accept for certain types of invitations.  It would also be possible to tell it to chain-call a different script; this would be more flexible (for example, if you wanted to run "iTunes Remote Control" instead), but slower.
+	-- Set this to a list containing some subset of "text", "audio", "video", "buddy authorization", "local screen sharing", "remote screen sharing", and "file transfer", depending on what you want to auto-accept.  (Note that "remote screen sharing" is presently broken; see the comment below.
+	-- The default, as distributed, is to not auto-accept anything, since that's really not the point of this script.
+	-- Example to enable only text and remote screen sharing:
+	-- property autoAccept : {"text", "remote screen sharing"}
+	property autoAccept : {}
+	
+	(*
+I have too many contacts on the social networks, and I don't chat with the vast majority of them.  This script supports filtering out the distracting login / logout messages.  I don't care about login / logout messages from Facebook friends or Bonjour contacts.
 
--- ignoreAccounts : Don't show certain events (listed in ignoreEvents, below) for these accounts.  The account name should match the "Description" field of the service in your iChat settings; note that Bonjour is always named "Bonjour".
-property ignoreAccounts : {"Facebook", "Bonjour"}
--- ignoreEvents : Don't show these events if the account name is in ignoreAccounts.  If the account is not in ignoreAccounts, then the event is handled normally. If you want to ignore a particular event altogether, regardless of account, then disable the script for that event in iChat's Preferences.
--- Note that only events that are associated with a buddy can be ignored here.
-property ignoreEvents : {"Buddy Became Available", "Buddy Became Unavailable"}
+However, if I'm chatting with any of these people, I do care what they have to say.  Only login and logout messages get filtered.
+*)
+	
+	-- filterEvents : Don't show these events if either the account name is in filterAccounts.  If you want to ignore a particular event altogether, regardless of account, then disable the script for that event in iChat's Preferences.
+	-- Note that only events that are associated with a buddy can be filterd here.
+	-- Example:
+	-- property filterEvents : {"Buddy Became Available", "Buddy Became Unavailable"}
+	property filterEvents : {}
+	
+	-- filterAccounts : Don't show certain events (listed in filterEvents) for these accounts.  The account name should match the "Description" field of the service in your iChat settings; note that Bonjour is always named "Bonjour".
+	-- Example:
+	-- property filterAccounts : {"Bonjour", "Facebook"}
+	property filterAccounts : {}
+	
+	-- If you're filtering certain events, you might want to turn off their sounds in iChat, and let this script play the sound if the event passes the filters.
+	-- The sound can be a filename, or any of the sounds built into iChat: "Buddy Logging In", "Buddy Logging Out", "File Transfer Complete", "Invitation Accepted", "Invitation", "Logged In", "Received Message", "Ringer", "Sent Message".
+	-- Example:
+	-- property soundList : {{event:"Buddy Became Available", sound:"Buddy Logging In"}, {event:"Buddy Became Unavailable", sound:"Buddy Logging Out"}}
+	property soundlist : {}
+	
+	(********************************************************
+This is the end of the configuration variables.
+********************************************************)
+end script
 
--- If you're ignoring certain accounts, you might want to turn off the sounds for the corresponding events in iChat, and let this script play the sound if the account isn't being ignored.
--- The sound can be a filename, or any of: "Buddy Logging In", "Buddy Logging Out", "File Transfer Complete", "Invitation Accepted", "Invitation", "Logged In", "Received Message", "Ringer", "Sent Message".  (This is the list of sounds built into iChat; it may change in new releases of iChat.)
-property soundlist : {{event:"Buddy Became Available", sound:"Buddy Logging In"}, {event:"Buddy Became Unavailable", sound:"Buddy Logging Out"}}
+property userConfig : missing value
+property userConfigLastModified : missing value
 
--- END OF OPTIONS --
+-- When we're loading the user's config, we save the default config (the one in "script config" above) here, so that if a variable is removed from the user's config, we can recover the default, despite "config" being persistent.
+property defaultConfig : missing value
 
-
+on getConfig(cfg, default)
+	try
+		return cfg's contents
+	on error number -1700
+		return default's contents
+	end try
+end getConfig
+on initConfig()
+	set userLib to (the path to the library folder from the user domain as text without folder creation)
+	-- We can't use "load script" on .applescript (uncompiled) files, only .scpt and .scptd files.  We actually can also use .app files, but I don't think that would be a great idea here.
+	repeat with extension in {"scpt", "scptd"}
+		set configPath to userLib & "Scripts:iChat:Growl Config." & extension
+		try
+			set newConfigAlias to the alias configPath
+			exit repeat
+		on error number -43
+			-- Try the next extension
+		end try
+	end repeat
+	if configPath is missing value then
+		log "No config file"
+		set configScript to {}
+		return
+	end if
+	
+	set newConfigScriptLastModified to the modification date of (info for newConfigAlias)
+	if newConfigScriptLastModified = userConfigLastModified then
+		-- The script we've loaded is the latest version.
+		log "Config is current"
+		return
+	end if
+	log "Loading config file"
+	if defaultConfig is missing value then
+		set defaultConfig to config
+	end if
+	load script newConfigAlias
+	set userConfig to the result
+	set userConfigLastModified to newConfigScriptLastModified
+	-- All these go through references, because it prevents us from getting an error immediately if they're not in the user's config file.  Instead, the error is raised when we dereference it in getConfig, where we have a handler.
+	-- Sadly, the AppleScript compiler will eliminate any Â continuations inside the record literal, so this is all run together.
+	set config's autoAccept to getConfig(a reference to userConfig's autoAccept, defaultConfig's autoAccept)
+	set config's filterEvents to getConfig(a reference to userConfig's filterEvents, defaultConfig's filterEvents)
+	set config's filterAccounts to getConfig(a reference to userConfig's filterAccounts, defaultConfig's filterAccounts)
+	set config's soundlist to getConfig(a reference to userConfig's soundlist, defaultConfig's soundlist)
+	return config
+end initConfig
 
 -- Play a sound file, specified by its POSIX path.  The file can be any format that Core Audio or QuickTime supports.
 on playSoundFile from soundPath
@@ -43,12 +118,14 @@ using terms from application "iChat"
 		local buddyName, buddyIcon
 		local theTitle, theDescription
 		
+		initConfig()
+		
 		if theBuddy is equal to null then
 			set theTitle to theEvent
 			set theDescription to theText
 			set buddyIcon to missing value
 		else
-			if theEvent is in ignoreEvents and the name of the service of theBuddy is in ignoreAccounts then return
+			if theEvent is in config's filterEvents and the name of the service of theBuddy is in config's filterAccounts then return
 			
 			set buddyName to theBuddy's name
 			set buddyIcon to theBuddy's image
@@ -74,7 +151,7 @@ using terms from application "iChat"
 			end try
 		end if
 		
-		repeat with soundRec in soundlist
+		repeat with soundRec in config's soundlist
 			if soundRec's event is theEvent then
 				playSound from soundRec's sound
 			end if
@@ -114,7 +191,7 @@ using terms from application "iChat"
 		local theBuddy
 		set theBuddy to theRequest's buddy
 		growl of (theBuddy's name & " requested authorization") from theBuddy for "Buddy Authorization Requested" without status
-		if "buddy authorization" is in autoAccept then accept theRequest
+		if "buddy authorization" is in config's autoAccept then accept theRequest
 	end buddy authorization requested
 	on chat room message received message from theBuddy for textChat
 		growl of message from theBuddy for "Chat Room Message Received" without status
@@ -134,19 +211,19 @@ using terms from application "iChat"
 	end message sent
 	on received text invitation message from theBuddy for textChat
 		growl of message from theBuddy for "Received Text Invitation" without status
-		if "text" is in autoAccept then accept textChat
+		if "text" is in config's autoAccept then accept textChat
 	end received text invitation
 	on received audio invitation from theBuddy for audioChat
 		growl of (theBuddy's name & " would like to speak with you.") from theBuddy for "Received Audio Invitation" without status
-		if "audio" is in autoAccept then accept audioChat
+		if "audio" is in config's autoAccept then accept audioChat
 	end received audio invitation
 	on received video invitation from theBuddy for videoChat
 		growl of (theBuddy's name & " would like to see you.") from theBuddy for "Received Video Invitation" without status
-		if "video" is in autoAccept then accept videoChat
+		if "video" is in config's autoAccept then accept videoChat
 	end received video invitation
 	on received local screen sharing invitation from theBuddy for screenChat
 		growl of (theBuddy's name & " would like to see your screen.") from theBuddy for "Received Local Screen Sharing Invitation" without status
-		if "local screen sharing" is in autoAccept then accept screenChat
+		if "local screen sharing" is in config's autoAccept then accept screenChat
 	end received local screen sharing invitation
 	(*
 	-- The "addressed message received" and "received remote screen sharing invitation" events
