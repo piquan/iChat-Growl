@@ -56,6 +56,10 @@ If you know some basic AppleScript, there's a few handlers you can put in your G
 	
 	-- We avoid using terms from iChat or Growl in the parameter names here, so that the user's config file doesn't need a "using terms from" section.  (Terms from AppleScript are fine, even if they're also in iChat or Growl.  That's why we can use "title".)
 	
+	-- loadedConfig is sent right after the config file is loaded, to give it a chance to initialize globals.
+	on loadedConfig()
+	end loadedConfig
+	
 	-- readyToNotify is called before notifications for an event, regardless of whether an event is filtered out or not.
 	on readyToNotify for theGrowlText from theBuddy out of growlEventName given showingStatus:showingStatus
 	end readyToNotify
@@ -111,6 +115,7 @@ on getConfig(cfg, default)
 	try
 		return cfg's contents
 	on error number -1700
+		-- Note that if the config has a parent, then this error will be number -1728 instead.  However, the mechanism I use here doesn't really work well with parented configs.
 		return default's contents
 	end try
 end getConfig
@@ -152,6 +157,7 @@ on initConfig()
 	set config's filterAccounts to getConfig(a reference to userConfig's filterAccounts, defaultConfig's filterAccounts)
 	set config's filterBuddies to getConfig(a reference to userConfig's filterBuddies, defaultConfig's filterBuddies)
 	set config's soundlist to getConfig(a reference to userConfig's soundlist, defaultConfig's soundlist)
+	set config's loadedConfig to getConfig(a reference to userConfig's loadedConfig, defaultConfig's loadedConfig)
 	set config's readyToNotify to getConfig(a reference to userConfig's readyToNotify, defaultConfig's readyToNotify)
 	set config's willNotify to getConfig(a reference to userConfig's willNotify, defaultConfig's willNotify)
 	set config's didNotify to getConfig(a reference to userConfig's didNotify, defaultConfig's didNotify)
@@ -160,6 +166,7 @@ on initConfig()
 	set config's willPlaySound to getConfig(a reference to userConfig's willPlaySound, defaultConfig's willGrowl)
 	set config's didPlaySound to getConfig(a reference to userConfig's didPlaySound, defaultConfig's didPlaySound)
 	set config's shouldNotify to getConfig(a reference to userConfig's shouldNotify, defaultConfig's shouldNotify)
+	config's loadedConfig()
 	return config
 end initConfig
 
@@ -337,10 +344,16 @@ using terms from application "iChat"
 end using terms from
 
 (*
--- It's convenient to have an "on run" handler during development to run test code from AppleScript Editor.  However, it appears that this handler will be called if there is an error, when iChat displays the error dialog.  (It is not called for normal events.)  So don't leave it in here after you're done with debugging.
+-- It's convenient to have an "on run" handler during development to run test code from AppleScript Editor.  However, it appears that this handler will be called if there is an error while running the other handlers, when iChat displays the error dialog.  (It is not called for normal events.)  So don't leave it in here after you're done with debugging.
 on run
-	using terms from application "iChat"
-		growl of "test message" from {handle:"buddy", name:"buddy", image:missing value, service:{name:"Gmail"}} for "Buddy Became Available" without showingStatus
-	end using terms from
+	initConfig()
+	set testRoutine to getConfig(a reference to userConfig's testRoutine, null)
+	if testRoutine is not null then
+		testRoutine()
+	else
+		using terms from application "iChat"
+			growl of "test message" from {handle:"buddy", name:"buddy", image:missing value, service:{name:"Gmail"}} for "Buddy Became Available" without showingStatus
+		end using terms from
+	end if
 end run
 *)
