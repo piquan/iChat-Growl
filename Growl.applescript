@@ -120,8 +120,13 @@ on getConfig(cfg, default)
 	end try
 end getConfig
 on initConfig()
+	if defaultConfig is missing value then
+		set defaultConfig to config
+	end if
+	
 	set userLib to (the path to the library folder from the user domain as text without folder creation)
 	-- We can't use "load script" on .applescript (uncompiled) files, only .scpt and .scptd files.  We actually can also use .app files, but I don't think that would be a great idea here.
+	set newConfigAlias to null
 	repeat with extension in {"scpt", "scptd"}
 		set configPath to userLib & "Scripts:iChat:Growl Config." & extension
 		try
@@ -131,9 +136,9 @@ on initConfig()
 			-- Try the next extension
 		end try
 	end repeat
-	if configPath is missing value then
+	if newConfigAlias is null then
 		log "No config file"
-		set configScript to {}
+		set config to defaultConfig
 		return
 	end if
 	
@@ -144,9 +149,6 @@ on initConfig()
 		return
 	end if
 	log "Loading config file"
-	if defaultConfig is missing value then
-		set defaultConfig to config
-	end if
 	load script newConfigAlias
 	set userConfig to the result
 	set userConfigLastModified to newConfigScriptLastModified
